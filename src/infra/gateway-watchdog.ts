@@ -162,6 +162,11 @@ export async function startGatewayWatchdog(opts: WatchdogOptions = {}): Promise<
       stdio: "inherit",
     });
 
+    // Prevent unhandled 'error' from crashing the watchdog (e.g. invalid execPath)
+    spawned.on("error", (err) => {
+      log.warn(`child process error: ${String(err)}`);
+    });
+
     state.childPid = spawned.pid ?? null;
     state.status = "running";
     writeWatchdogState(state, opts.stateDir);
