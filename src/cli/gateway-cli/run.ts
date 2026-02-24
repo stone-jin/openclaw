@@ -15,6 +15,7 @@ import type { GatewayWsLogStyle } from "../../gateway/ws-logging.js";
 import { setGatewayWsLogStyle } from "../../gateway/ws-logging.js";
 import { setVerbose } from "../../globals.js";
 import { GatewayLockError } from "../../infra/gateway-lock.js";
+import { startGatewayWatchdog, WATCHDOG_CHILD_ENV } from "../../infra/gateway-watchdog.js";
 import { formatPortDiagnostics, inspectPortUsage } from "../../infra/ports.js";
 import { setConsoleSubsystemFilter, setConsoleTimestampPrefix } from "../../logging/console.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
@@ -50,6 +51,7 @@ type GatewayRunOpts = {
   rawStreamPath?: unknown;
   dev?: boolean;
   reset?: boolean;
+  watchdog?: boolean;
 };
 
 const gatewayLog = createSubsystemLogger("gateway");
@@ -75,6 +77,7 @@ const GATEWAY_RUN_BOOLEAN_KEYS = [
   "claudeCliLogs",
   "compact",
   "rawStream",
+  "watchdog",
 ] as const;
 
 function resolveGatewayRunOptions(opts: GatewayRunOpts, command?: Command): GatewayRunOpts {
@@ -99,6 +102,14 @@ function resolveGatewayRunOptions(opts: GatewayRunOpts, command?: Command): Gate
 }
 
 async function runGatewayCommand(opts: GatewayRunOpts) {
+  // When --watchdog is set and we're not already the child, become the supervisor.
+  // The supervisor spawns the gateway as a monitored child process.
+  if (opts.watchdog && !process.env[WATCHDOG_CHILD_ENV]) {
+    gatewayLog.info("starting gateway with watchdog supervisor");
+    await startGatewayWatchdog();
+    return;
+  }
+
   const isDevProfile = process.env.OPENCLAW_PROFILE?.trim().toLowerCase() === "dev";
   const devMode = Boolean(opts.dev) || isDevProfile;
   if (opts.reset && !devMode) {
@@ -394,6 +405,11 @@ export function addGatewayRunCommand(cmd: Command): Command {
     .option("--compact", 'Alias for "--ws-log compact"', false)
     .option("--raw-stream", "Log raw model stream events to jsonl", false)
     .option("--raw-stream-path <path>", "Raw stream jsonl path")
+    .option(
+      "--watchdog",
+      "Run with a watchdog supervisor that auto-restarts the gateway on crashes",
+      false,
+    )
     .action(async (opts, command) => {
       await runGatewayCommand(resolveGatewayRunOptions(opts, command));
     });

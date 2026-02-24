@@ -24,7 +24,7 @@ function isTruthy(value: string | undefined): boolean {
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }
 
-function isLikelySupervisedProcess(env: NodeJS.ProcessEnv = process.env): boolean {
+export function isLikelySupervisedProcess(env: NodeJS.ProcessEnv = process.env): boolean {
   return SUPERVISOR_HINT_ENV_VARS.some((key) => {
     const value = env[key];
     return typeof value === "string" && value.trim().length > 0;
