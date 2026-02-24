@@ -65,14 +65,33 @@ export function registerBrowserAgentSnapshotRoutes(
       ctx,
       targetId,
       feature: "navigate",
-      run: async ({ cdpUrl, tab, pw }) => {
+      run: async ({ cdpUrl, tab, pw, profileCtx }) => {
         const result = await pw.navigateViaPlaywright({
           cdpUrl,
           targetId: tab.targetId,
           url,
           ...withBrowserNavigationPolicy(ctx.state().resolved.ssrfPolicy),
         });
-        res.json({ ok: true, targetId: tab.targetId, ...result });
+        let currentTargetId = tab.targetId;
+        try {
+          const refreshed = await profileCtx.listTabs();
+          const byUrl = refreshed.find((t) => t.url === result.url);
+          if (byUrl) {
+            currentTargetId = byUrl.targetId;
+          } else if (!refreshed.some((t) => t.targetId === tab.targetId)) {
+            await new Promise((r) => setTimeout(r, 800));
+            const retried = await profileCtx.listTabs();
+            const match =
+              retried.find((t) => t.url === result.url) ??
+              (retried.length === 1 ? retried[0] : null);
+            if (match) {
+              currentTargetId = match.targetId;
+            }
+          }
+        } catch {
+          // Best-effort: fall back to pre-navigation targetId
+        }
+        res.json({ ok: true, targetId: currentTargetId, ...result });
       },
     });
   });
