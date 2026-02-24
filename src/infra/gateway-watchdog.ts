@@ -60,15 +60,6 @@ function writeWatchdogState(state: WatchdogState, stateDir?: string): void {
   }
 }
 
-function removeWatchdogState(stateDir?: string): void {
-  const statePath = resolveWatchdogStatePath(stateDir);
-  try {
-    fs.unlinkSync(statePath);
-  } catch {
-    // file may not exist
-  }
-}
-
 export function readWatchdogState(stateDir?: string): WatchdogState | null {
   const statePath = resolveWatchdogStatePath(stateDir);
   try {
