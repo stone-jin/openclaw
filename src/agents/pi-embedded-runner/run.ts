@@ -41,6 +41,7 @@ import {
   isLikelyContextOverflowError,
   isFailoverAssistantError,
   isFailoverErrorMessage,
+  isStreamEventOrderError,
   parseImageSizeError,
   parseImageDimensionError,
   isRateLimitAssistantError,
@@ -506,8 +507,10 @@ export async function runEmbeddedPiAgent(
       }
 
       const MAX_OVERFLOW_COMPACTION_ATTEMPTS = 3;
+      const MAX_STREAM_EVENT_ORDER_RETRIES = 2;
       const MAX_RUN_LOOP_ITERATIONS = resolveMaxRunRetryIterations(profileCandidates.length);
       let overflowCompactionAttempts = 0;
+      let streamEventOrderRetries = 0;
       let toolResultTruncationAttempted = false;
       const usageAccumulator = createUsageAccumulator();
       let lastRunPromptUsage: ReturnType<typeof normalizeUsage> | undefined;
@@ -845,6 +848,21 @@ export async function runEmbeddedPiAgent(
                 error: { kind, message: errorText },
               },
             };
+          }
+
+          // Stream protocol error (e.g., Anthropic SDK received message_start
+          // before the previous message_stop). Transient server-side issue; retry.
+          if (
+            !aborted &&
+            assistantErrorText &&
+            isStreamEventOrderError(assistantErrorText) &&
+            streamEventOrderRetries < MAX_STREAM_EVENT_ORDER_RETRIES
+          ) {
+            streamEventOrderRetries++;
+            log.warn(
+              `stream event order error (attempt ${streamEventOrderRetries}/${MAX_STREAM_EVENT_ORDER_RETRIES}) for ${provider}/${modelId}; retrying`,
+            );
+            continue;
           }
 
           if (promptError && !aborted) {
