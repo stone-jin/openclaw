@@ -134,7 +134,7 @@ describe("models-config", () => {
     });
   });
 
-  it("preserves non-empty agent apiKey/baseUrl for matching providers in merge mode", async () => {
+  it("propagates explicit config apiKey/baseUrl over stale agent values in merge mode", async () => {
     await withTempHome(async () => {
       const agentDir = resolveOpenClawAgentDir();
       await fs.mkdir(agentDir, { recursive: true });
@@ -184,8 +184,56 @@ describe("models-config", () => {
       const parsed = await readGeneratedModelsJson<{
         providers: Record<string, { apiKey?: string; baseUrl?: string }>;
       }>();
-      expect(parsed.providers.custom?.apiKey).toBe("AGENT_KEY");
-      expect(parsed.providers.custom?.baseUrl).toBe("https://agent.example/v1");
+      expect(parsed.providers.custom?.apiKey).toBe("CONFIG_KEY");
+      expect(parsed.providers.custom?.baseUrl).toBe("https://config.example/v1");
+    });
+  });
+
+  it("preserves agent-local apiKey/baseUrl when provider is only implicitly discovered", async () => {
+    await withTempHome(async () => {
+      const agentDir = resolveOpenClawAgentDir();
+      await fs.mkdir(agentDir, { recursive: true });
+      await fs.writeFile(
+        path.join(agentDir, "models.json"),
+        JSON.stringify(
+          {
+            providers: {
+              openai: {
+                baseUrl: "https://agent-custom-relay.example/v1",
+                apiKey: "AGENT_OPENAI_KEY",
+                api: "openai-responses",
+                models: [{ id: "gpt-4o", name: "GPT-4o", input: ["text"] }],
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const prevKey = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = "sk-implicit-openai-key";
+      try {
+        await ensureOpenClawModelsJson({
+          models: {
+            mode: "merge",
+            providers: {},
+          },
+        });
+
+        const parsed = await readGeneratedModelsJson<{
+          providers: Record<string, { apiKey?: string; baseUrl?: string }>;
+        }>();
+        expect(parsed.providers.openai?.apiKey).toBe("AGENT_OPENAI_KEY");
+        expect(parsed.providers.openai?.baseUrl).toBe("https://agent-custom-relay.example/v1");
+      } finally {
+        if (prevKey === undefined) {
+          delete process.env.OPENAI_API_KEY;
+        } else {
+          process.env.OPENAI_API_KEY = prevKey;
+        }
+      }
     });
   });
 

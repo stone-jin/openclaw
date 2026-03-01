@@ -163,11 +163,19 @@ export async function ensureOpenClawModelsJson(
             })
           | undefined;
         if (existing) {
+          // Only preserve agent-local apiKey/baseUrl when the global config
+          // does not explicitly set them. When the user updates these fields in
+          // openclaw.json (explicit providers), those values must propagate to
+          // every agent; otherwise stale credentials remain stuck in the
+          // per-agent models.json forever.
+          const explicitEntry = explicitProviders[key] as
+            | ({ apiKey?: string; baseUrl?: string } & Record<string, unknown>)
+            | undefined;
           const preserved: Record<string, unknown> = {};
-          if (typeof existing.apiKey === "string" && existing.apiKey) {
+          if (typeof existing.apiKey === "string" && existing.apiKey && !explicitEntry?.apiKey) {
             preserved.apiKey = existing.apiKey;
           }
-          if (typeof existing.baseUrl === "string" && existing.baseUrl) {
+          if (typeof existing.baseUrl === "string" && existing.baseUrl && !explicitEntry?.baseUrl) {
             preserved.baseUrl = existing.baseUrl;
           }
           mergedProviders[key] = { ...newEntry, ...preserved };
