@@ -59,6 +59,7 @@ import {
   emitAgentEvent,
   registerAgentRunContext,
 } from "../infra/agent-events.js";
+import { installProviderProxyDispatcher } from "../infra/net/provider-proxy-dispatcher.js";
 import { buildOutboundSessionContext } from "../infra/outbound/session-context.js";
 import { getRemoteSkillEligibility } from "../infra/skills-remote.js";
 import { normalizeAgentId } from "../routing/session-key.js";
@@ -234,6 +235,8 @@ export async function agentCommand(
   }
 
   const cfg = loadConfig();
+  installProviderProxyDispatcher(cfg.models);
+
   const agentIdOverrideRaw = opts.agentId?.trim();
   const agentIdOverride = agentIdOverrideRaw ? normalizeAgentId(agentIdOverrideRaw) : undefined;
   if (agentIdOverride) {
